@@ -49,6 +49,13 @@ evaluation does not fit in a 20-request day, so the committed
 LLM_MODEL=gemini-flash-lite-latest python eval/run_eval.py --min-interval 6
 ```
 
+`--resume` is there for the flaky end of that: every graded answer is appended to
+`eval/.cache/<provider>-<model>.jsonl` as soon as it is scored, so an interrupted
+run (a closed terminal, a `429`, a Ctrl-C) is continued by running the same command
+again instead of paying for the same questions twice. A cached answer is reused only
+while its question is unchanged, and never when the row is an error. Delete
+`eval/.cache/` to force fresh answers.
+
 Set `LLM_MIN_INTERVAL=13` (seconds between calls) to avoid the per-minute `429`
 in normal use.
 
@@ -68,7 +75,7 @@ Exit codes: `0` answered, `1` configuration or model error, `2` no question.
 ## Tests
 
 ```bash
-python -m pytest          # 237 tests, 216 passed, 21 skipped, no network, no API key
+python -m pytest          # 247 tests, 226 passed, 21 skipped, no network, no API key
 ```
 
 The suite covers every refund rule including the 48 h / 24 h boundaries, booking
@@ -89,7 +96,7 @@ python eval/run_eval.py --fake          # plumbing check, no key needed
 `eval/questions.json` holds 15 questions with their expected outcome: which tool
 must be called, which amounts and phrases must appear, which must not, and which
 questions the agent has to decline. The last run is committed as
-`eval/results.md` (13/15 correct, 0 unsupported euro amounts on
+`eval/results.md` (15/15 correct, 0 unsupported euro amounts on
 `gemini-flash-lite-latest`); `SOLUTION.md` explains what failed and why.
 
 ## How it works

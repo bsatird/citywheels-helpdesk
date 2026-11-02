@@ -7,9 +7,10 @@ arithmetic: prices, deposits and refunds are computed in Python with `Decimal`.
 * **Provider:** Google Gemini free tier (`gemini-3.5-flash` by default, the lite
   model for the evaluation run) through the OpenAI-compatible endpoint. No
   framework, ~120 lines of `requests` in `citywheels/llm.py`.
-* **Tests:** `python -m pytest` -> 237 tests, 216 passing and 21 skipped, no network
+* **Tests:** `python -m pytest` -> 247 tests, 226 passing and 21 skipped, no network
   and no key needed for any of them.
-* **Evaluation:** `python eval/run_eval.py` -> `eval/results.md`, 15 questions.
+* **Evaluation:** `python eval/run_eval.py` -> `eval/results.md`, 15 questions,
+  15/15 correct with 0 unsupported euro amounts.
 
 ## 1. How to install and run it
 
@@ -108,10 +109,15 @@ Three decisions do most of the work against hallucinations:
 
 * **Money is never computed by the model.** `calculate_refund` returns
   `rental_refund_eur`, `deposit_refund_eur`, `total_refund_eur` and a ready
-  `explanation`, and the prompt tells the model to copy those numbers verbatim.
-  The 24 h / 48 h boundaries, the never-refunded booking fee, the always-refunded
-  deposit and the voucher-instead-of-cash rule are unit-tested in Python
-  (`tests/test_refunds.py`), not trusted to a language model.
+  `explanation`, and the prompt tells the model to copy those numbers verbatim. It
+  also routes every money question through the calculator - including "can I still
+  get something back?" and the cases where the answer must be zero - so the tool,
+  not the model, decides that nothing is refunded. The 24 h / 48 h boundaries, the
+  never-refunded booking fee, the always-refunded deposit and the
+  voucher-instead-of-cash rule are unit-tested in Python (`tests/test_refunds.py`),
+  not trusted to a language model. When a fee would have to be worked out for a
+  detail the customer has not given yet (which bike was late), the prompt asks the
+  model to state the rule and ask instead of doing the multiplication itself.
 * **Every failure is a tool result, not an exception.** Unknown tool, unparsable
   arguments, unexpected error, `found: false` - all come back as JSON with an
   `error`/`message` key that the model is told to report. A bad booking number
@@ -196,67 +202,95 @@ fail once, and any number in the evaluation results comes from a real
 
 `python eval/run_eval.py` writes `eval/results.md`; the committed report is the run
 below (15 questions, shop clock pinned to `2026-06-10T09:00:00+02:00`,
-`gemini-flash-lite-latest`, 181 s, no `429` after the retry logic and
-`--min-interval 6`):
+`gemini-flash-lite-latest`, 168.6 s, run with `--min-interval 6` to stay inside the
+free-tier request limit - any `429` is retried with the delay the API asks for):
 
-> **Score: 13/15 correct (87%)**, 12/13 used the required tools, **0 unsupported
+> **Score: 15/15 correct (100%)**, 13/13 used the required tools, **0 unsupported
 > euro amounts**.
 
 What that says in practice:
 
 * Every refund answer quoted the amounts `calculate_refund` returned, to the cent,
-  including the two boundaries the rules care about (exactly 48 h is still a full
-  refund, exactly 24 h is still half) and the cases that must return nothing
-  (in-progress and already-cancelled bookings).
+  across the cases the rules distinguish: the 50 % bracket (Q01), a cancelled booking
+  with a deposit (Q02), "less than 24 h, so no rental price back" (Q03), a voucher
+  paid booking that comes back as a voucher (Q04), an already cancelled booking
+  (Q15) and one that is running now (Q05). The "nothing is refunded" answers call the
+  calculator too and quote the zero instead of working it out themselves.
 * No answer contained a euro amount that no tool produced - the guardrail stayed
   empty for all 15 questions, which is the property I care about most.
-* The out-of-scope question (Q13) and the unknown booking (Q06) were both declined
-  with the staff contact, not answered from the model's own knowledge.
+* The out-of-scope question (Q13), the unknown booking (Q06) and "do you rent
+  tandems or scooters?" (Q14) were all declined and handed to the staff contact
+  instead of being answered from the model's own knowledge.
 * Retrieval picked the right section for prices, opening hours, age limits, the
   deposit, late return and bad weather.
 
-The two failures are worth more than the score:
+### The road to 15/15: three runs, only one of them about code
+
+| Run | Score | What was really wrong |
+| --- | --- | --- |
+| 1 | 11/15, 7 unsupported amounts | the guardrail read only JSON, so amounts copied from policy prose looked invented; the refund tool's own text said "never as cash", which Q04 forbids |
+| 2 | 13/15 | two prompt gaps (Q05, Q14); Q11 was graded against a total the model refuses to compute |
+| 3 | 15/15, 0 unsupported amounts | the rules and the negation-aware check below |
+
+The second run's failures are worth more than the score, because each one was a
+decision about *where* to fix something:
 
 **Q05 - "CW-1008 is running right now. Can I cancel it and get money back?"** The
-answer is correct ("status `in_progress` ... cannot be cancelled, nothing is
+answer was correct ("status `in_progress` ... cannot be cancelled, nothing is
 refunded") but the model reached it from `get_booking` + `search_policies` and never
-called `calculate_refund`, so the `tools` check failed. The prompt says "any refund
-amount: call `calculate_refund`", and this question asks about money without naming
-an amount, so the rule did not fire. That is a prompt gap, not a tool gap: the
-system prompt should say that any question about whether money comes back goes
-through the calculator even when the expected answer is "nothing".
+called `calculate_refund`. The prompt said "any refund amount: call
+`calculate_refund`", and this question asks about money without naming an amount, so
+the rule did not fire. That is a prompt gap, not a tool gap: the rule now covers any
+question about money coming back, "even when you expect the answer to be zero".
 
-**Q14 - "Do you also rent tandems or scooters?"** The model answered "Tandems and
-scooters are not listed in our fleet" from the price list but did not use the
-refusal wording ("I do not have that information, please contact the staff"), so
-the `refusal` check failed. The information is right; the escalation is missing.
+**Q14 - "Do you also rent tandems or scooters?"** The model answered "tandems and
+scooters are not listed in our fleet" from the price list but never escalated, so the
+`refusal` check failed. The information was right, the hand-off was missing. The
+refusal section now says that when we do not offer something, say so *and* give the
+staff contact.
 
-### What changed because of the earlier runs
+**Q11 - "I returned my bike three hours late. What does that cost?"** is the one case
+where the expectation was wrong, not the answer. The prompt says money is never
+computed by the model, so the honest answer states the "1.5x hourly price" rule and
+asks which bike was late - it cannot know the hourly price without knowing the bike.
+The case now accepts that ("depends", "which bike"), and a second prompt rule tells
+the model to state the rule and ask rather than do the multiplication.
 
-The first full run of this evaluation scored **11/15 with 7 unsupported amounts**,
-and the four failures were not model failures:
+### The first run: two harness bugs, not model failures
+
+The first full run of this evaluation scored **11/15 with 7 unsupported amounts**, and
+the difference was in the measuring equipment:
 
 * Q04 failed on every attempt because `calculate_refund` itself said the voucher
   refund is "never as cash", and "cash" is the phrase the case forbids. The tool
   text now says "not as money on a card", and a new test
   (`test_forbidden_phrases_are_not_contradicted_by_the_refund_tool`) checks that no
-  case forbids a word its own tool output contains.
+  case forbids a word its own tool output contains. The evaluator also stopped
+  treating a negated mention as a claim (`mentions_forbidden`), because "comes back
+  as a voucher, not as cash" is the *correct* answer to Q04 and substring matching
+  failed it.
 * Q08 ("40 EUR for an e-bike per day") and Q10 ("150 EUR deposit") were flagged as
   ungrounded although both amounts were in the policy text: the guardrail only read
   numbers out of JSON, and `search_policies` returns prose. It now reads euro
   amounts from prose too, with tests for both directions.
-* Q11 (late return) went from failing to passing for the same reason: the answer
-  quoted the "1.5x hourly price" rule, and the hourly prices are prose.
+* Q11 (late return) had the same cause: the answer quoted the "1.5x hourly price"
+  rule, and both the multiplier and the hourly prices are prose, not JSON fields.
+  Seven amounts were flagged in that run; the ones I checked by hand (the 40 EUR
+  daily price and the 150 EUR deposit) were figures the model had copied correctly
+  out of a tool's prose, which is why the fix was in the guardrail, not the prompt.
 
 Earlier still, an evaluation run on a Gemini 3.x model failed on **15/15**
 questions with `HTTP 400 ... Function call is missing a thought_signature`; that is
 what the `ToolCall.extra` / `extra_content` round-trip in `agent.py` exists for.
 
-The honest reading of 13/15: the money path is solid (0 unsupported amounts across
-15 answers, which is the check that would catch a real bug), and the remaining
-failures are about *when* to call the calculator and *how* to escalate - both
-prompt-level issues that the next run should fix by tightening one rule, not by
-changing any code.
+The honest reading of 15/15: the check that would catch a real bug is "0 unsupported
+euro amounts", and it held on all 15 answers in every run once the guardrail could
+read prose. The score itself moved for reasons I can name - two harness bugs, two
+prompt rules, one expectation I had written too strictly - which is the useful part:
+a score that only goes up because the model got better would tell me nothing about
+the system around it. One run of one model is not a guarantee, and the failures that
+remain possible are exactly the ones this harness cannot see (tone, a subtly wrong
+paraphrase that keeps the right numbers).
 
 ### Limits of this measurement
 
@@ -266,6 +300,13 @@ tool-selection and fact-copying behaviour, not tone. Everything the score is bas
 on is deterministic string and number matching (`eval/run_eval.py`), so the checks
 are inspectable and cannot be talked into passing - but they also cannot judge
 whether an answer *reads* well.
+
+The harness is also built for an unreliable terminal and a small free quota: every
+graded case is appended to `eval/.cache/` as soon as it is scored (`--resume`), so an
+interrupted run continues where it stopped instead of paying for the same questions
+twice. The committed report is a complete run - no answer in it is reused - but the
+next run of the same unchanged questions would cost zero requests, which is why the
+report says how many answers came from the cache when that happens.
 
 
 ## 6. Limitations
@@ -287,9 +328,9 @@ whether an answer *reads* well.
 * **The evaluation is small.** 15 questions, one run, one model. It measures tool
   selection, key facts and refusals, not tone, and a single run cannot separate
   model flakiness from a real regression.
-* **Free-tier throughput.** ~5 requests/minute means a full eval run takes minutes,
-  and a real shop would need a paid key (or a response cache) to serve a queue of
-  customers.
+* **Free-tier throughput.** ~5 requests/minute and ~20 requests/day on the free
+  Gemini keys means a full eval run takes minutes and a real shop would need a paid
+  key (or a response cache) to serve a queue of customers.
 * **The answers are English and the documents are English.** The prompt asks the
   model to answer in the customer's language, but nothing guarantees that a Polish
   or German answer is as accurate as the English one.
@@ -317,3 +358,8 @@ whether an answer *reads* well.
    place where the model could do arithmetic in its head.
 6. **Operational bits**: response cache for repeated questions, `--json` output for
    other tools, cost/latency tracing, and an HTTP wrapper reusing the same tools.
+7. **Record the real answers.** The `--resume` cache already keeps graded answers
+   per model; turning it into proper cassettes (question -> recorded response) would
+   let CI replay a real run with no key and no rate limit, and would make the
+   15-question score reproducible on any machine. It would also let the suite check
+   the *answers* of the last real run, not just the scoring of hand-written strings.

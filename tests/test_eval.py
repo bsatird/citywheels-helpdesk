@@ -210,6 +210,38 @@ def test_score_case_flags_a_forbidden_phrase(harness, cases):
     assert checks["phrases"] is True
 
 
+def test_a_negated_forbidden_word_is_not_a_claim(harness):
+    """\"not as cash\" mentions the word but promises the opposite, so it is allowed."""
+    assert harness.mentions_forbidden("You get the money in cash.", "cash")
+    assert not harness.mentions_forbidden("It comes back as a voucher, not as cash.", "cash")
+    assert not harness.mentions_forbidden("The refund is never paid out in cash.", "cash")
+    assert not harness.mentions_forbidden("A voucher rather than cash.", "cash")
+    assert not harness.mentions_forbidden("Instead of cash you get a voucher.", "cash")
+
+
+def test_a_negation_far_away_does_not_excuse_the_claim(harness):
+    text = (
+        "The booking exists and was paid by voucher. There is no doubt about that. "
+        "You will get the 73 EUR in cash at the counter."
+    )
+    assert harness.mentions_forbidden(text, "cash")
+
+
+def test_score_case_accepts_a_negated_forbidden_word(harness, cases):
+    case = case_by_id(cases, "Q04")
+    result = result_of(
+        harness,
+        answer=(
+            "You get 73 EUR as a new voucher, not as cash: 23 EUR of the rental "
+            "price and the 50 EUR deposit."
+        ),
+        tools=["calculate_refund"],
+    )
+    checks = harness.score_case(case, result)
+    assert checks["forbidden"] is True
+    assert all(checks.values()), checks
+
+
 def test_score_case_flags_an_ungrounded_amount(harness, cases):
     case = case_by_id(cases, "Q13")  # out of scope, no amount may appear
     result = result_of(harness, answer="Canberra.", unsupported=[42.0])
@@ -334,3 +366,141 @@ def test_load_cases_rejects_an_empty_file(harness, tmp_path):
     empty.write_text("[]", encoding="utf-8")
     with pytest.raises(SystemExit):
         harness.load_cases(empty)
+
+
+# --------------------------------------------------------------------------- #
+# resuming an interrupted run
+# --------------------------------------------------------------------------- #
+
+
+def graded_result(harness, case, *, answer=None, error=None):
+    return harness.CaseResult(
+        case_id=case["id"],
+        question=case["question"],
+        answer=answer if answer is not None else "Sorry, that is outside CityWheels.",
+        checks={
+            "tools": True,
+            "amounts": True,
+            "phrases": True,
+            "forbidden": True,
+            "grounded": True,
+            "refusal": True,
+        },
+        error=error,
+        note=case.get("note", ""),
+    )
+
+
+def test_case_fingerprint_follows_the_content_of_a_case(harness, cases):
+    case = case_by_id(cases, "Q13")
+    assert harness.case_fingerprint(case) == harness.case_fingerprint(dict(case))
+    assert harness.case_fingerprint(case) != harness.case_fingerprint(
+        {**case, "note": "edited later"}
+    )
+
+
+def test_a_graded_case_is_reused_instead_of_asked_again(harness, tmp_path, cases):
+    cached, other = case_by_id(cases, "Q13"), case_by_id(cases, "Q14")
+    cache = tmp_path / "cache.jsonl"
+    harness.store_result(cache, cached, graded_result(harness, cached))
+    harness.store_result(cache, other, graded_result(harness, other))
+    destination = tmp_path / "results.md"
+
+    code = harness.main(
+        [
+            "--fake",
+            "--only",
+            "Q13,Q14",
+            "--quiet",
+            "--resume",
+            "--cache",
+            str(cache),
+            "--out",
+            str(destination),
+        ]
+    )
+
+    assert code == 0
+    report = destination.read_text(encoding="utf-8")
+    assert "Sorry, that is outside CityWheels." in report  # the cached answer
+    assert "(fake model)" not in report  # the model was never asked
+    assert "2/2 correct (100%)" in report
+    assert report.index("| Q13 |") < report.index("| Q14 |")  # question order kept
+    assert len(cache.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_the_report_says_how_many_answers_were_reused(harness, cases):
+    report = harness.render_markdown(
+        [passing_result(harness, "Q01")],
+        [case_by_id(cases, "Q01")],
+        provider="p",
+        model="m",
+        fake=False,
+        reused=1,
+    )
+    assert "1 of these answers were reused" in report
+
+
+def test_a_case_that_changed_is_asked_again(harness, tmp_path, cases):
+    case = case_by_id(cases, "Q13")
+    cache = tmp_path / "cache.jsonl"
+    harness.store_result(
+        cache, {**case, "note": "old wording"}, graded_result(harness, case)
+    )
+    destination = tmp_path / "results.md"
+
+    code = harness.main(
+        ["--fake", "--only", "Q13", "--quiet", "--resume", "--cache", str(cache),
+         "--out", str(destination)]
+    )
+
+    assert code == 0
+    assert "(fake model)" in destination.read_text(encoding="utf-8")
+
+
+def test_a_rate_limited_case_is_asked_again(harness, tmp_path, cases):
+    """An error row is not a grade: the model never answered, so it is retried."""
+    case = case_by_id(cases, "Q13")
+    cache = tmp_path / "cache.jsonl"
+    harness.store_result(
+        cache, case, graded_result(harness, case, error="429 rate limited")
+    )
+    destination = tmp_path / "results.md"
+
+    code = harness.main(
+        ["--fake", "--only", "Q13", "--quiet", "--resume", "--cache", str(cache),
+         "--out", str(destination)]
+    )
+
+    assert code == 0
+    report = destination.read_text(encoding="utf-8")
+    assert "(fake model)" in report
+    assert "429 rate limited" not in report
+    assert len(cache.read_text(encoding="utf-8").splitlines()) == 2  # retry appended
+
+
+def test_a_half_written_cache_line_is_skipped(harness, tmp_path, cases):
+    case = case_by_id(cases, "Q13")
+    cache = tmp_path / "cache.jsonl"
+    harness.store_result(cache, case, graded_result(harness, case))
+    with cache.open("a", encoding="utf-8") as handle:
+        handle.write('{"id": "Q13", "fingerpr')  # a run killed mid-write
+
+    rows = harness.read_cache(cache)
+    assert set(rows) == {"Q13"}
+    assert harness.reusable(case, rows) is not None
+
+
+def test_the_cache_is_ignored_without_resume(harness, tmp_path, cases):
+    case = case_by_id(cases, "Q13")
+    cache = tmp_path / "cache.jsonl"
+    harness.store_result(cache, case, graded_result(harness, case))
+    destination = tmp_path / "results.md"
+
+    code = harness.main(
+        ["--fake", "--only", "Q13", "--quiet", "--cache", str(cache),
+         "--out", str(destination)]
+    )
+
+    assert code == 0
+    assert "(fake model)" in destination.read_text(encoding="utf-8")

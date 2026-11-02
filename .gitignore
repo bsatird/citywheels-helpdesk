@@ -19,6 +19,9 @@ venv/
 .coverage
 htmlcov/
 
+# Evaluation progress cache (--resume): local state, not an artefact
+eval/.cache/
+
 # OS / editors
 .DS_Store
 Thumbs.db

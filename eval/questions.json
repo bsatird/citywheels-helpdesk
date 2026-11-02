@@ -94,9 +94,9 @@
     "question": "I brought the bike back three hours late. How much extra is that?",
     "expect_tools": ["search_policies"],
     "expect_amounts": [],
-    "expect_phrases": [["1.5"], ["deposit"]],
+    "expect_phrases": [["1.5"], ["deposit"], ["depends", "which bike", "what bike", "bike type"]],
     "forbid_phrases": [],
-    "note": "prices.md#late-return: 1.5x the hourly price per started hour, taken from the deposit"
+    "note": "prices.md#late-return: 1.5x the hourly price per started hour, taken from the deposit; the customer did not say which bike, so the answer must give the rule and ask"
   },
   {
     "id": "Q12",
