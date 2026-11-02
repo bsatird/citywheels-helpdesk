@@ -19,12 +19,14 @@ git clone https://github.com/bsatird/citywheels-helpdesk && cd citywheels-helpde
 python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env                              # then put your key into LLM_API_KEY
+cp .env.example .env                              # then put your key into GEMINI_API_KEY
 python -m citywheels "How much do I get back if I cancel CW-1002 today?"
 ```
 
 `.env` is the only place a key lives; it is in `.gitignore` and the repository
-contains just `.env.example` with empty values.
+contains just `.env.example` with empty values. `GEMINI_API_KEY` is the variable the
+Gemini preset reads; `LLM_API_KEY` overrides it (and is the one to use for the other
+providers).
 
 ```bash
 python -m citywheels -i                                     # interactive, keeps memory

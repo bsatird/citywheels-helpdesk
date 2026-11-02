@@ -18,11 +18,11 @@ card within 5 working days. The 5 EUR booking fee is not refunded.
 ## Quick start
 
 ```bash
-git clone <this repo> && cd citywheels-helpdesk
+git clone https://github.com/bsatird/citywheels-helpdesk && cd citywheels-helpdesk
 python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env        # then put your key into LLM_API_KEY
+cp .env.example .env        # then put your key into GEMINI_API_KEY
 python -m citywheels "What time do you open on Saturday?"
 ```
 
