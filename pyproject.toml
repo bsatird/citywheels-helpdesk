@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "citywheels-helpdesk"
+version = "0.1.0"
+description = "Command-line AI help desk agent for the CityWheels bike rental shop"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31", "python-dotenv>=1.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+citywheels-agent = "citywheels.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["citywheels*"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

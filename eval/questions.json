@@ -1,0 +1,137 @@
+[
+  {
+    "id": "Q01",
+    "question": "How much money do I get back if I cancel booking CW-1002 today?",
+    "expect_tools": ["calculate_refund"],
+    "expect_amounts": [340, 300],
+    "expect_phrases": [["card"]],
+    "forbid_phrases": ["cash"],
+    "note": "33 h before the start -> 50% of 80 EUR = 40 EUR + 300 EUR deposit"
+  },
+  {
+    "id": "Q02",
+    "question": "Cancel CW-1007 for me. What is the refund?",
+    "expect_tools": ["calculate_refund"],
+    "expect_amounts": [186, 150, 36],
+    "expect_phrases": [["100"]],
+    "forbid_phrases": [],
+    "note": "exactly 48 h before the start is still a full refund: 36 + 150"
+  },
+  {
+    "id": "Q03",
+    "question": "My CW-1003 rental starts this afternoon. If I cancel now, do I get the rental price back?",
+    "expect_tools": ["calculate_refund"],
+    "expect_amounts": [50],
+    "expect_phrases": [["not refunded", "no refund", "0%", "nothing"]],
+    "forbid_phrases": ["12 EUR back"],
+    "note": "6 h before the start -> 0% of 12 EUR, only the 50 EUR deposit comes back"
+  },
+  {
+    "id": "Q04",
+    "question": "I paid for CW-1004 with a voucher. What happens if I cancel it?",
+    "expect_tools": ["calculate_refund"],
+    "expect_amounts": [73],
+    "expect_phrases": [["voucher"]],
+    "forbid_phrases": ["cash"],
+    "note": "240 h before the start -> 23 EUR rental + 50 EUR deposit, as a new voucher"
+  },
+  {
+    "id": "Q05",
+    "question": "CW-1008 is running right now. Can I cancel it and get money back?",
+    "expect_tools": ["calculate_refund"],
+    "expect_amounts": [],
+    "expect_phrases": [["in progress", "in_progress"]],
+    "forbid_phrases": ["you will get 50", "refund of 50"],
+    "note": "status in_progress cannot be cancelled, nothing is refunded"
+  },
+  {
+    "id": "Q06",
+    "question": "Where is my booking CW-4242? What bike did I reserve?",
+    "expect_tools": ["get_booking"],
+    "expect_amounts": [],
+    "expect_phrases": [["not find", "not found", "no booking", "couldn't find"]],
+    "forbid_phrases": ["city bike", "e-bike", "kids bike"],
+    "note": "unknown number: the agent must not invent a bike type"
+  },
+  {
+    "id": "Q07",
+    "question": "What time do you open on Saturday?",
+    "expect_tools": ["search_policies"],
+    "expect_amounts": [],
+    "expect_phrases": [["08:00", "8:00"], ["20:00", "8 pm", "8pm"]],
+    "forbid_phrases": ["24 hours", "24/7"],
+    "note": "faq.md#when-are-you-open: April-October 08:00-20:00 every day"
+  },
+  {
+    "id": "Q08",
+    "question": "How much does an electric bike cost for a whole day?",
+    "expect_tools": ["search_policies"],
+    "expect_amounts": [40],
+    "expect_phrases": [["day"]],
+    "forbid_phrases": [],
+    "note": "prices.md#bike-rental: e-bike 40 EUR per day, 9 EUR per hour"
+  },
+  {
+    "id": "Q09",
+    "question": "Can my 14-year-old son rent an e-bike on his own?",
+    "expect_tools": ["search_policies"],
+    "expect_amounts": [16],
+    "expect_phrases": [["guardian", "parent"]],
+    "forbid_phrases": [],
+    "note": "faq.md#are-there-age-limits: e-bikes from 16, under 18 needs a guardian"
+  },
+  {
+    "id": "Q10",
+    "question": "How much deposit do I have to pay for an electric bike?",
+    "expect_tools": ["search_policies"],
+    "expect_amounts": [150],
+    "expect_phrases": [["deposit"]],
+    "forbid_phrases": [],
+    "note": "prices.md#deposit: 150 EUR per e-bike"
+  },
+  {
+    "id": "Q11",
+    "question": "I brought the bike back three hours late. How much extra is that?",
+    "expect_tools": ["search_policies"],
+    "expect_amounts": [],
+    "expect_phrases": [["1.5"], ["deposit"]],
+    "forbid_phrases": [],
+    "note": "prices.md#late-return: 1.5x the hourly price per started hour, taken from the deposit"
+  },
+  {
+    "id": "Q12",
+    "question": "A storm warning is forecast for the day of my rental. Can I get my money back?",
+    "expect_tools": ["search_policies"],
+    "expect_amounts": [],
+    "expect_phrases": [["staff", "contact", "call"]],
+    "forbid_phrases": ["guaranteed", "automatically"],
+    "note": "cancellations.md#bad-weather: the staff decide each case, the customer must contact them"
+  },
+  {
+    "id": "Q13",
+    "question": "What is the capital of Australia?",
+    "expect_tools": [],
+    "expect_amounts": [],
+    "expect_refusal": true,
+    "forbid_phrases": ["canberra"],
+    "note": "out of scope: no tool can answer it, so the agent must decline"
+  },
+  {
+    "id": "Q14",
+    "question": "Do you also rent tandems or scooters?",
+    "expect_tools": [],
+    "expect_amounts": [],
+    "expect_refusal": true,
+    "forbid_phrases": ["yes, we do"],
+    "note": "not in the documents, so the agent must not invent an offer"
+  },
+  {
+    "id": "Q15",
+    "question": "I cancelled CW-1005 last week. Can I still get my money back?",
+    "expect_tools": ["calculate_refund"],
+    "expect_amounts": [],
+    "expect_phrases": [["cannot", "can't", "not possible", "already cancelled", "no refund"]],
+    "forbid_phrases": ["you will get 186", "refund of 186"],
+    "note": "status cancelled: nothing is refunded, the agent must not invent an amount"
+  }
+]
