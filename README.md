@@ -95,9 +95,12 @@ python eval/run_eval.py --fake          # plumbing check, no key needed
 
 `eval/questions.json` holds 15 questions with their expected outcome: which tool
 must be called, which amounts and phrases must appear, which must not, and which
-questions the agent has to decline. The last run is committed as
-`eval/results.md` (15/15 correct, 0 unsupported euro amounts on
-`gemini-flash-lite-latest`); `SOLUTION.md` explains what failed and why.
+questions the agent has to decline. Two runs are committed: `eval/results.md`
+(15/15 correct, 0 unsupported euro amounts on `gemini-flash-lite-latest`) and
+`eval/results-gemini-3.5-flash.md` (the same 15/15 on the default model, which is how
+the optional "compare two approaches" part is covered). `LLM_MODEL` runs the harness on
+another model and `--out` keeps the earlier report intact; `SOLUTION.md` explains what
+failed and why.
 
 ## How it works
 

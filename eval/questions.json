@@ -94,9 +94,9 @@
     "question": "I brought the bike back three hours late. How much extra is that?",
     "expect_tools": ["search_policies"],
     "expect_amounts": [],
-    "expect_phrases": [["1.5"], ["deposit"], ["depends", "which bike", "what bike", "bike type"]],
+    "expect_phrases": [["1.5"], ["deposit"], ["depends", "which bike", "what bike", "bike type", "type of bike", "which type"]],
     "forbid_phrases": [],
-    "note": "prices.md#late-return: 1.5x the hourly price per started hour, taken from the deposit; the customer did not say which bike, so the answer must give the rule and ask"
+    "note": "prices.md#late-return: 1.5x the hourly price per started hour, taken from the deposit; the customer did not say which bike, so the answer must give the rule and ask. Asking for the \"type of bike\" is asking which bike - added 2026-11-03, after gemini-3.5-flash asked exactly that way and the literal list scored it as a miss"
   },
   {
     "id": "Q12",

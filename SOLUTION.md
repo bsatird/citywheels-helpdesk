@@ -5,12 +5,14 @@ The model never states a fact it did not read from a tool result, and it never d
 arithmetic: prices, deposits and refunds are computed in Python with `Decimal`.
 
 * **Provider:** Google Gemini free tier (`gemini-3.5-flash` by default, the lite
-  model for the evaluation run) through the OpenAI-compatible endpoint. No
-  framework, ~120 lines of `requests` in `citywheels/llm.py`.
+  model for the first evaluation run; both are compared in §5) through the
+  OpenAI-compatible endpoint. No framework, ~120 lines of `requests` in
+  `citywheels/llm.py`.
 * **Tests:** `python -m pytest` -> 247 tests, 226 passing and 21 skipped, no network
   and no key needed for any of them.
 * **Evaluation:** `python eval/run_eval.py` -> `eval/results.md`, 15 questions,
-  15/15 correct with 0 unsupported euro amounts.
+  15/15 correct with 0 unsupported euro amounts; a second run on the default model
+  is committed as `eval/results-gemini-3.5-flash.md`.
 
 ## 1. How to install and run it
 
@@ -210,6 +212,11 @@ free-tier request limit - any `429` is retried with the delay the API asks for):
 > **Score: 15/15 correct (100%)**, 13/13 used the required tools, **0 unsupported
 > euro amounts**.
 
+That report is `gemini-flash-lite-latest`, chosen for quota reasons, while the code
+ships with `gemini-3.5-flash`. The same 15 questions were later run on the default
+model and committed next to it as `eval/results-gemini-3.5-flash.md`; *Two models,
+one harness* at the end of this section has the comparison.
+
 What that says in practice:
 
 * Every refund answer quoted the amounts `calculate_refund` returned, to the cent,
@@ -310,6 +317,44 @@ twice. The committed report is a complete run - no answer in it is reused - but 
 next run of the same unchanged questions would cost zero requests, which is why the
 report says how many answers came from the cache when that happens.
 
+
+### Two models, one harness
+
+The same harness, the same 15 questions and the same fixed clock, run against the
+second model:
+
+| | `gemini-flash-lite-latest` | `gemini-3.5-flash` (the default) |
+| --- | --- | --- |
+| Score | 15/15 | 15/15 |
+| Unsupported euro amounts | 0 | 0 |
+| Sum of the 15 per-question timings | 168.6 s | 480.1 s |
+| Committed report | `eval/results.md` | `eval/results-gemini-3.5-flash.md` |
+
+The timing column is not the two models racing: `seconds` in a report is the sum of
+the per-question timings, and on the bigger model that sum is dominated by the waits
+for `429` retries. The free tier allows about 20 requests per day **per Google
+project** - two API keys inside one project share that budget, which is why the run
+went through several sessions with `--resume` and `--min-interval 13`. A full run
+costs 30-45 requests, so requests, not seconds, are the unit the quota measures. What
+the table does establish is the property I wanted from a second model: two different
+models agreeing on 15/15 and on zero unsupported amounts makes the score look like a
+property of the harness, the prompt and the tools, not of one model's luck.
+
+The second run also found a bug in the *test*. Q11 ("I returned my bike three hours
+late") failed on `gemini-3.5-flash` with an answer that gave the 1.5x hourly rule,
+said the fee comes out of the deposit and asked *"which type of bike?"*. Asking which
+type of bike **is** asking which bike, but the case's `expect_phrases` listed only
+"depends", "which bike", "what bike" and "bike type", so a correct answer scored as a
+miss. The expectation was widened (`eval/questions.json`, with a dated note); the
+model was not touched. That is the second time in this project where the measuring
+equipment was the broken part - the first was the guardrail that could not read prose
+- and it is why the 15/15 above is worth more than the number: the score moves when I
+can name why.
+
+What the comparison does not say: that the bigger model is better. The questions are
+written to be answerable from the tools, both models cleared them, and the failure
+modes this harness cannot see - tone, a fluent paraphrase that keeps the numbers -
+stay invisible on both.
 
 ## 6. Limitations
 
