@@ -51,16 +51,21 @@ for the evaluation committed in `eval/results.md`. Reasons:
 
 * It is genuinely free, so the task can be run by anyone reviewing it.
 * It supports the `tools` / `tool_calls` protocol, so the same request shape works
-  for Gemini, OpenAI, GitHub Models and a local Ollama - `LLM_PROVIDER` swaps the
-  preset, `LLM_MODEL` / `LLM_BASE_URL` / `LLM_API_KEY` override anything.
+  for Gemini, OpenAI and a local Ollama - `LLM_PROVIDER` swaps the preset,
+  `LLM_MODEL` / `LLM_BASE_URL` / `LLM_API_KEY` override anything. (The `github`
+  preset points at GitHub Models, retired on 2026-07-30: it stays as an example of
+  what a preset is, and `LLM_BASE_URL` redirects it to any compatible host.)
 * Tool calling is reliable enough that the model picks the right tool without
   examples in the prompt, which keeps the system prompt short.
 
-Why two models: the free tier of this project allows 5 requests per minute and 20
-per day on `gemini-2.5-flash` (both numbers come from the `429` body, not from
-guessing), and one answer costs 2-3 requests, so 15 questions do not fit in a day.
-The lite model has its own, much larger bucket; the behaviour is identical, so the
-report names the model it used.
+Why two models: the free tier allows 5 requests per minute and about 20 per day,
+and the daily bucket belongs to the *Google project*, not to the key - two keys
+inside one project share it (both numbers come from the `429` body, not from
+guessing). One answer costs 2-3 requests, so 15 questions do not fit in a day: the
+lite-model report was a single session, the default-model report was collected over
+several sessions with `--resume`, each asking only the questions without a cached
+answer. The lite model's daily bucket is large enough for a whole run and its
+behaviour is identical, so the report names the model it used.
 
 I wrote the HTTP client instead of using LangChain/LangGraph because the loop is
 about 40 lines: send messages + tool schemas, run the requested tools, append the
@@ -375,9 +380,10 @@ stay invisible on both.
 * **The evaluation is small.** 15 questions, one run, one model. It measures tool
   selection, key facts and refusals, not tone, and a single run cannot separate
   model flakiness from a real regression.
-* **Free-tier throughput.** ~5 requests/minute and ~20 requests/day on the free
-  Gemini keys means a full eval run takes minutes and a real shop would need a paid
-  key (or a response cache) to serve a queue of customers.
+* **Free-tier throughput.** ~5 requests/minute and ~20 requests/day, counted *per
+  Google project*, on the free Gemini keys means a full eval run takes minutes and
+  a real shop would need a paid key (or a response cache) to serve a queue of
+  customers.
 * **The answers are English and the documents are English.** The prompt asks the
   model to answer in the customer's language, but nothing guarantees that a Polish
   or German answer is as accurate as the English one.

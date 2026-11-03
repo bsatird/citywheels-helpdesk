@@ -35,19 +35,25 @@ GEMINI_API_KEY=AIza...
 ```
 
 Any OpenAI-compatible endpoint works; `LLM_PROVIDER` also accepts `openai`,
-`github` (GitHub Models) and `ollama` (local). See `.env.example` for the
-variables and defaults.
+`github` and `ollama` (local). See `.env.example` for the variables and defaults.
+The `github` preset is kept as an example only: GitHub Models itself was retired
+on 2026-07-30, so that host no longer answers - point `LLM_BASE_URL` at another
+compatible service to use it.
 
 Free Gemini keys are tight: the API answers `429` both per minute (~5 requests)
-and per day (20 requests on the `gemini-2.5-flash` project we used, the number is
-in the error body). One agent answer is 2-3 requests. Nothing breaks - the client
-honours the delay the provider asks for and retries - but a full 15-question
-evaluation does not fit in a 20-request day, so the committed
-`eval/results.md` was produced with the lite model:
+and per day (about 20 requests *per project* - the number is in the error body,
+and two keys inside one project share that budget). One agent answer is 2-3
+requests. Nothing breaks - the client honours the delay the provider asks for
+and retries - but a full 15-question evaluation does not fit in a 20-request day,
+so it has to be spread over sessions with `--resume`, or run on the lite model:
 
 ```bash
 LLM_MODEL=gemini-flash-lite-latest python eval/run_eval.py --min-interval 6
 ```
+
+The default model's report (`eval/results-gemini-3.5-flash.md`) was collected the
+other way: several sessions with `--min-interval 13`, each one asking only the
+questions that had no cached answer yet.
 
 `--resume` is there for the flaky end of that: every graded answer is appended to
 `eval/.cache/<provider>-<model>.jsonl` as soon as it is scored, so an interrupted
@@ -145,7 +151,7 @@ question -> HelpDeskAgent.run()
 ```
 citywheels/          agent, CLI, tools, prompts, guardrails, fake model
 data/                bookings.json and the policy Markdown (the only source of truth)
-eval/                questions.json, run_eval.py, results.md
+eval/                questions.json, run_eval.py, results*.md (one report per model)
 tests/               pytest suite
 SOLUTION.md          design notes, evaluation results, limitations, next steps
 ```

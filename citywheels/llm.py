@@ -1,9 +1,13 @@
 """A small OpenAI-compatible chat client.
 
-Gemini (AI Studio), GitHub Models, OpenAI and a local Ollama all speak the same
+Gemini (AI Studio), OpenAI and a local Ollama all speak the same
 ``POST /chat/completions`` protocol with ``tools``, so one ~120-line client covers
 every free option of the assignment. ``LLM_PROVIDER`` picks the preset; every value
 can be overridden from the environment.
+
+The ``github`` preset is a leftover: GitHub Models was retired on 2026-07-30, so
+that host no longer answers. It stays because a preset is three lines of data, and
+``LLM_BASE_URL`` is all it takes to aim it at another OpenAI-compatible service.
 """
 
 from __future__ import annotations
@@ -37,11 +41,13 @@ PRESETS: dict[str, dict[str, Any]] = {
         "key_vars": ("OPENAI_API_KEY",),
         "docs": "https://platform.openai.com/api-keys (paid)",
     },
+    # Retired on 2026-07-30 (docs.github.com/en/github-models) - kept as an example
+    # preset; LLM_BASE_URL / LLM_MODEL point it at any other compatible host.
     "github": {
         "base_url": "https://models.github.ai/inference",
         "model": "openai/gpt-4o-mini",
         "key_vars": ("GITHUB_TOKEN", "GITHUB_MODELS_TOKEN"),
-        "docs": "https://github.com/settings/tokens (free with a GitHub account)",
+        "docs": "https://github.com/settings/tokens (retired service, see above)",
     },
     "ollama": {
         "base_url": "http://localhost:11434/v1",
